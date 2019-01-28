@@ -1,0 +1,15 @@
+# Replace lab8.* and o_to_c.* with your own file.
+# Create *.h 
+#           a. only contains header files and functions
+#           b. Do not use int main() in your function C file.
+
+# You can remove -Wall and -g and -std=c99 flags.
+
+lab8 : function.o lab8.o
+	gcc -g function.o lab8.o -o lab8 -lm -std=c99
+
+function.o : function.c function.h
+	gcc -g -c function.c -std=c99
+
+lab8.o : lab8.c function.h
+	gcc -g -c lab8.c -std=c99

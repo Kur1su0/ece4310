@@ -1,0 +1,8 @@
+lab8 : o_to_c.o lab6.o
+	gcc -Wall -g o_to_c.o lab8.o -o lab8 -lm -std=c99
+
+o_to_c.o : o_to_c.c o_to_c.h
+	gcc -Wall -g -c o_to_c.c -std=c99
+
+lab8.o : lab8.c o_to_c.h
+	gcc -Wall -g -c lab8.c -std=c99

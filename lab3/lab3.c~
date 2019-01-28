@@ -1,0 +1,719 @@
+
+/*
+** lab3.c
+** Zice Wei
+** zicew
+** ECE 4310 FALL 2018
+** letter detection.
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define image_path "src/parenthood.ppm"
+#define e_path     "src/parenthood_e_template.ppm"
+#define msf_path   "src/msf.ppm"
+#define gt_path   "src/gt"
+#define w_r         7
+#define w_c         4
+int thre;
+//prototype
+/*
+typedef struct _PIXEL{
+    unsigned char pixel;
+    int           mark = 0;
+}_PIXEL; */
+
+// unsigned char* readimage(unsigned char*, int);
+void image_saver(int, unsigned char*,int,int,int,int);
+unsigned char* thin(unsigned char*, int, int);
+void get_end_branch_point(unsigned char*, int*,int*,int,int);
+
+
+int main(int argc, char const *argv[])
+{
+    FILE	             	*fpt;
+    FILE	             	*pFile;
+    unsigned char	        *image;
+    unsigned char         *msf;
+    unsigned char	        *e;
+
+    char	             	header[320];
+    char		            header_e[320];
+    char		            header_msf[320];
+
+    int		            ROWS, COLS, BYTES;
+    int		            ROWS_e, COLS_e, BYTES_e;
+    int		            ROWS_msf, COLS_msf, BYTES_msf;
+
+    int		            r, c, r2, c2, sum;
+    int                   threshold = -1;
+
+
+    if(argc!=2) {
+        printf("too few argument\n");
+        exit(1);
+    }
+    threshold = atoi(argv[1]);
+    thre = threshold;
+    if (threshold <= 0) {
+        printf("error threshold\n");
+        exit(1);
+    }
+
+    if ((fpt=fopen(image_path,"rb")) == NULL) {
+        printf("Unable to open text.ppm for reading\n");
+        exit(0);
+    }
+    fscanf(fpt,"%s %d %d %d\n",header,&COLS,&ROWS,&BYTES);
+    if (strcmp(header,"P5") != 0  ||  BYTES != 255) {
+        printf("Not a greyscale 8-bit PPM image\n");
+        exit(0);
+    }
+
+    image     =    (unsigned char *)calloc(ROWS*COLS,sizeof(unsigned char));
+
+    fread(image,1,COLS*ROWS,fpt);
+    fclose(fpt);
+    fpt = NULL;
+
+    //Read "e"
+    if ((fpt=fopen(e_path,"rb")) == NULL) {
+        printf("Unable to open e.ppm for reading\n");
+        exit(0);
+    }
+    fscanf(fpt,"%s %d %d %d\n",header_e,&COLS_e,&ROWS_e,&BYTES_e);
+    if (strcmp(header_e,"P5") != 0  ||  BYTES_e != 255) {
+        printf("Not a greyscale 8-bit PPM image\n");
+        exit(0);
+    }
+    e         =    (unsigned char *)calloc(ROWS_e*COLS_e,sizeof(unsigned char));
+
+
+    fread(e,1,COLS_e*ROWS_e,fpt);
+    fclose(fpt);
+    fpt = NULL;
+
+    //Read msf
+    if ((fpt=fopen(msf_path,"rb")) == NULL) {
+        printf("Unable to open msf.ppm for reading\n");
+        exit(0);
+    }
+    fscanf(fpt,"%s %d %d %d\n",header_msf,&COLS_msf,&ROWS_msf,&BYTES_msf);
+    if (strcmp(header_msf,"P5") != 0  ||  BYTES_msf != 255) {
+        printf("Not a greyscale 8-bit PPM image\n");
+        exit(0);
+    }
+
+    msf         =    (unsigned char *)calloc(ROWS_msf*COLS_msf,sizeof(unsigned char));
+    unsigned char* temp;
+    unsigned char* temp2;
+    temp         =    (unsigned char *)calloc(ROWS_e*COLS_e,sizeof(unsigned char));
+    temp2         =    (unsigned char *)calloc(ROWS_e*COLS_e,sizeof(unsigned char));
+
+
+    fread(msf,1,COLS_msf*ROWS_msf,fpt);
+    fclose(fpt);
+    fpt = NULL;
+
+    int flag = 0;
+
+
+
+
+    if ((pFile=fopen(gt_path,"rb")) == NULL) {
+        printf("Unable to open gt for reading\n");
+        exit(0);
+    }
+    char letter;
+    int  gt_cols = 0, gt_rows = 0;
+    int  count = 0;
+    flag = -1;
+
+    int TP=0,FP=0, TN=0, FN=0;
+    float TPR=0, FPR=0;
+    int i = 0;
+    int branch=0,end=0;
+    while(1) {
+        flag = 0;
+         branch=0;end=0;
+        //read data
+        fscanf(pFile, "%c %d %d\n",&letter, &gt_cols, &gt_rows);
+        //printf("%c: %d %d\n",letter, gt_cols, gt_rows );
+
+        //#define w_r         7
+        //#define w_c         4
+
+        //a. iii copy letter to temp
+        for(r=-w_r; r<=w_r; r++) {
+            for(c=-w_c; c<=w_c; c++) {
+                if(msf[(r+gt_rows)*COLS_msf+c+gt_cols] > (unsigned char)threshold){
+                    flag = 1;
+                }
+                temp[i] = image[(r+gt_rows)*COLS +c+gt_cols];
+                i++;
+
+            }
+
+        }
+
+        //a. iv thre the image to 128
+        for(i=0; i<ROWS_e*COLS_e; i++) {
+            temp[i] = temp[i]>(unsigned char)128?(unsigned char)0:(unsigned char)255;
+        }
+
+        if(gt_cols==164 && gt_rows==341 ){
+          image_saver(0,temp, COLS_e,ROWS_e, gt_cols,gt_rows);
+          temp2 = thin(temp, COLS_e, ROWS_e);
+          get_end_branch_point(temp2, &end,&branch, COLS_e, ROWS_e);
+          printf("endpoint:%d branchpoint: %d\n",end, branch);
+          image_saver(1,temp2, COLS_e,ROWS_e, gt_cols,gt_rows);
+
+
+
+        }
+        if(flag == 1){
+        //image_saver(0,temp, COLS_e,ROWS_e, gt_cols,gt_rows);
+        i = 0;
+        //a. v. Thin
+        //image_saver(1,temp2, COLS_e,ROWS_e, gt_cols,gt_rows);
+
+        //printf("%c %d %d\n",letter, gt_cols, gt_rows);
+      //  printf("COLS %d\n",COLS_e);
+        //printf("ROWS %d\n\n\n",ROWS_e);
+        temp2 = thin(temp, COLS_e, ROWS_e);
+        get_end_branch_point(temp2, &end,&branch, COLS_e, ROWS_e);
+
+        //image_saver(1,temp2, COLS_e,ROWS_e, gt_cols,gt_rows);
+        //exit(1);
+      }
+        //b. count up FPs and TPs.
+        if(letter == 'e') {
+            if (flag == 1) {
+              if(end==1&&branch==1)
+                TP++;
+
+            } else {
+                FN++;
+            }
+
+        } else {
+            if(flag==1) {
+
+                FP++;
+            } else {
+                TN++;
+            }
+
+        }
+        flag = 0;
+        //Set the pFile back.
+        if (feof(pFile)) {
+
+            fseek(pFile,0,SEEK_SET);
+            break;
+        }
+
+
+
+    }
+    //calculate
+    TPR = (float)TP /(TP+FN);
+    FPR = (float)FP /(FP+TN);
+    printf("%d %d %f %f\n", TP, FP, TPR, FPR);
+
+    return 0;
+}
+
+
+//save image.
+void image_saver(int thre_flag,unsigned char* image,
+                 int cols_e,int rows_e,
+                 int pixel_x , int pixel_y)
+{
+    FILE* pFile;
+    char path[30];
+    if(thre_flag==1){
+        snprintf(path,sizeof(path),"out/letter/%d/%d_%d_thre.ppm",thre,pixel_x, pixel_y);
+    }
+    else{
+        snprintf(path,sizeof(path),"out/letter/%d/%d_%d.ppm",thre,pixel_x, pixel_y);
+    }
+    pFile = fopen(path,"w");
+    fprintf(pFile,"P5 %d %d 255\n",cols_e,rows_e);
+    fwrite(image,rows_e*cols_e,1,pFile);
+    fclose(pFile);
+
+}
+
+int get_egde( unsigned char* letter, int COLS_e, int ROWS_e,
+              int* p0, int* p1, int* p2, int* p3,
+              int* p4, int* p5, int* p6, int* p7, int*p8,int r,int c){
+              int i=0 ,j=0;
+              int e_to_ne=0;
+              int new_col = COLS_e+2;
+              int new_row = COLS_e+2;
+              int real_pixel_head = new_col+1; //12
+              int edge_array[9];
+              int r2=0,c2=0;
+
+                  /*
+                  *p0 = ext[r*(COLS_e) +  c + real_pixel_head ];
+                  *p1 = ext[r*(COLS_e) +  c + real_pixel_head   - real_pixel_head];
+                  *p2 = ext[r*(COLS_e) +  c + real_pixel_head   - real_pixel_head +1];
+                  *p3 = ext[r*(COLS_e) +  c + real_pixel_head   - real_pixel_head +2];
+                  *p4 = ext[r*(COLS_e) +  c + real_pixel_head   + 1 ];
+                  *p5 = ext[r*(COLS_e) +  c + 2*real_pixel_head     ];
+                  *p6 = ext[r*(COLS_e) +  c + 2*real_pixel_head - 1 ];
+                  *p7 = ext[r*(COLS_e) +  c + 2*real_pixel_head - 2 ];
+                  *p8 = ext[r*(COLS_e) +  c + real_pixel_head   - 1 ];
+                  */
+                  //---
+                  // p1 p2 p3
+                  // p8 p0 p4
+                  // p7 p6 p5
+                  //---
+
+
+                  //------------------------
+                  // p1 p2 p3
+                  // p8 p0 p4
+                  // p7 p6 p5
+                  //------------------------
+
+
+                 if( letter[r*(COLS_e)+c]!=0) {
+
+                    *p0 = letter[r*(COLS_e) +  c            ];
+                    *p1 = letter[(r-1)*(COLS_e) +  c - 1    ];
+                    *p2 = letter[(r-1)*(COLS_e) +  c        ];
+                    *p3 = letter[(r-1)*(COLS_e) +  c + 1    ];
+                    *p4 = letter[r*(COLS_e) +  c     + 1    ];
+                    *p5 = letter[(r+1)*(COLS_e) +  c + 1    ];
+                    *p6 = letter[(r+1)*(COLS_e) +  c        ];
+                    *p7 = letter[(r+1)*(COLS_e) +  c - 1    ];
+                    *p8 = letter[r*(COLS_e) +  c     - 1    ];
+
+                      if(r==0){
+                        *p1=-1;
+                        *p2=-1;
+                        *p3=-1;
+                      }
+                      if(c==0){
+                        *p1=-1;
+                        *p8=-1;
+                        *p7=-1;
+
+                      }
+                      if(c==COLS_e){
+                        *p2=-1;
+                        *p3=-1;
+                        *p4=-1;
+
+                      }
+                      if(r==ROWS_e){
+                        *p5=-1;
+                        *p6=-1;
+                        *p7=-1;
+                      }
+                     /*
+                     printf("%4d ",*p1);
+                      printf("%4d ",*p2);
+                      printf("%4d\n",*p3);
+                      printf("%4d ",*p8);
+                      printf("%4d ",*p0);
+                      printf("%4d\n",*p4);
+                      printf("%4d ",*p7);
+                      printf("%4d ",*p6);
+                      printf("%4d\n",*p5);
+                      printf("\n\n");
+
+                      */
+                      edge_array[0] = *p1;
+                      edge_array[1] = *p2;
+                      edge_array[2] = *p3;
+                      edge_array[3] = *p4;
+                      edge_array[4] = *p5;
+                      edge_array[5] = *p6;
+                      edge_array[6] = *p7;
+                      edge_array[7] = *p8;
+                      edge_array[8] = *p1;
+
+                    /*  for(i=0;i<7;i++){
+                          if(edge_array[i]==255&&edge_array[i+1])
+                          e_to_ne++;
+
+                      }*/
+
+                      for (i=0; i<8; i++) {
+                          while(edge_array[i]==7) {
+                              i++;
+                          }
+                          j=i+1;
+                          while(edge_array[j]==-1) {
+                              if(j>=8) j = j%8; //over stack
+                              j++;
+                          }
+                          if(edge_array[i]==255&&edge_array[j]==0) {
+                              e_to_ne++;
+
+                          }
+                          i=j;
+                      }
+
+                      return e_to_ne+100;
+
+                  } else {
+                      e_to_ne = 0;
+                      //          continue;
+                      return e_to_ne;
+
+                  }
+
+}
+int get_neighbour(int p0,int p1,int p2,int p3,int p4,int p5,int p6,int p7,int p8){
+    int neighbour=0;
+
+  if(p0==0) {
+      neighbour = 0;
+  } else {
+      if(p1==255) neighbour++;
+      if(p2==255) neighbour++;
+      if(p3==255) neighbour++;
+      if(p4==255) neighbour++;
+      if(p5==255) neighbour++;
+      if(p6==255) neighbour++;
+      if(p7==255) neighbour++;
+      if(p8==255) neighbour++;
+  }
+  return neighbour;
+}
+int get_neighborNum(unsigned char *img, int img_cols,int img_rows ,int x, int y)
+{
+	int c=0, r=0, num=0;
+	for(r=y-1; r<= y+1; r++)
+		for (c = x-1; c <= x+1; ++c)
+		{
+			if (c==x && r==y)
+				continue;
+				if(c>=0 && c <img_cols && r>=0 && r< img_rows)
+				num= img[r*img_cols+c]!=0? num+1: num;
+		}
+	return num;
+}
+
+
+int get_EdgeTrans(unsigned char *img, int img_cols, int img_rows,int x, int y)
+{
+	int r, c;
+	int trans_num=0;
+	unsigned char front_val=0, rear_val=0;
+	int x_head=-1, x_end=1, y_head=-1, y_end=1;
+	// check valid position
+	if(x <0 ||x>=img_cols||y<0|| y>=img_rows) return -1;
+	if( y-1<0) y_head=0;
+	if(y+1>= img_rows) y_end=0;
+	if(x-1 <0) x_head=0;
+	if(x +1>=img_cols) x_end=0;
+	//check top line
+	for (c=x_head; c< x_end;c ++)
+	{
+		front_val=img[(y+y_head )*img_cols+x+c];
+		rear_val=img[(y+y_head)*img_cols+c+x+1];
+		// check 8-neighbor pixel, if it is boundary pixel, do the following
+		if(y_head ==0)
+		{
+			trans_num= img[ y*img_cols+x-1] !=0? trans_num+1: trans_num;
+			trans_num= img[ y*img_cols+x+1] !=0? trans_num+1: trans_num;
+			break;
+		}
+		else if(front_val!= rear_val && (front_val & rear_val)==0) //check boundary transition
+					trans_num++;
+	}
+	//check rightmost column
+	for (r=y_head; r< y_end; ++r)
+	{
+		front_val=img[(y+r )*img_cols+x+x_end];
+		rear_val=img[(y+r+1)*img_cols+x+x_end];
+
+		if(x_end ==0)
+		{
+			trans_num= img[ (y-1)*img_cols+x] !=0? trans_num+1: trans_num;
+			trans_num= img[ (y+1)*img_cols+x] !=0? trans_num+1: trans_num;
+			break;
+		}
+		else if(front_val!= rear_val &&(front_val & rear_val)==0 )
+					trans_num++;
+	}
+
+	//check bottom line
+	for (c= x_end;c >x_head ; --c)
+	{
+		front_val=img[(y+y_end )*img_cols+x+c];
+		rear_val= img[(y+y_end)*img_cols+c+x-1];
+		if(y_end ==0)
+		{
+			trans_num= img[ y*img_cols+x-1] !=0? trans_num+1: trans_num;
+			trans_num= img[ y*img_cols+x+1] !=0? trans_num+1: trans_num;
+			break;
+		}
+		else if( front_val!=rear_val && (front_val & rear_val) ==0)
+					trans_num++;
+	}
+	//check leftmost column
+	for ( r=y_end; r> y_head; --r)
+	{
+		front_val =img[(y+r-1)*img_cols+x+x_head];
+		rear_val=img[(y+r )*img_cols+x+x_head];
+		if(x_head ==0)
+		{
+			trans_num= img[ (y-1)*img_cols+x] !=0? trans_num+1: trans_num;
+			trans_num= img[ (y+1)*img_cols+x] !=0? trans_num+1: trans_num;
+			break;
+		}
+		else
+		if(front_val !=rear_val && (front_val & rear_val)==0 )
+					trans_num++;
+	}
+	return trans_num/2;
+}
+
+
+
+unsigned char* thin(unsigned char *sub_img,	//subimage address
+				int img_cols,	//sub-image size
+				int img_rows
+
+				 )
+{
+	// uchar temp[img_rows*img_cols];
+	int c,r;
+	int neighbor_num;
+	int edge_num=0;
+	int marked_num=1;
+	// clean the boundary value before thinning
+
+
+	/*scan and label nonedge pixels*/
+	 while(marked_num>0)
+	{
+
+	// clean marked number before next marking
+	marked_num=0;
+
+	// scan each pixel for marking
+	for (r = 1; r < img_rows-1; ++r)
+	{
+		for (c = 1; c < img_cols-1; ++c)
+		{
+			// scan neighbor pixel for each pixel
+			// mark pixels for erasure
+      int p0,p1,p2,p3,p4,p5,p6,p7,p8;
+      neighbor_num = get_egde( sub_img,  img_cols,  img_rows,
+                    &p0,  &p1, & p2,  &p3,
+                     &p4,  &p5, & p6,  &p7,& p8, c, r);
+		//	neighbor_num=get_neighborNum(sub_img,img_cols, img_rows,c,r);
+
+			edge_num= get_EdgeTrans(sub_img, img_cols,img_rows,c,r);
+			// check edge->noedge transition number
+			if( neighbor_num >=3 && neighbor_num <=7 &&  edge_num==1)
+			{
+
+					// check N S W E pixels states
+					if((sub_img[r*img_cols+c-1]==0&& sub_img[(r+1)*img_cols+c]==0) ||sub_img[(r-1)*img_cols+c] ==0 || sub_img[r*img_cols+c+1]==0 )
+					{
+					//if it is non-edge doesn't mark the point
+						if( sub_img[r*img_cols+c]!=0)
+						{
+
+							sub_img[r*img_cols+c]= 127 ;
+							marked_num++;
+						}
+					}
+			}
+
+		}
+	}
+		//clean marked pixels.
+		for (r = 1; r < img_rows-1; ++r)
+			for (c = 1; c < img_cols-1; ++c)
+			{
+				if(sub_img[r*img_cols+c]==127)
+				{
+					// printf("c: %d  r: %d \n",c, r );
+					sub_img[r*img_cols+c]=0;
+				}
+			}
+	         printf("result:\n");
+     for(r=0;r<img_rows;r++){
+        for(c=0;c<img_cols;c++){
+            printf("%4d",sub_img[r*img_cols+c]);
+        }printf("\n");
+     }printf("\n\n");
+
+	}
+
+
+return sub_img;
+}
+/*
+unsigned char* thin(unsigned char* letter, int COLS_e, int ROWS_e)
+{
+
+    int mark = 1;
+    int r,c, r2, c2;
+    int e_to_ne=0;
+    int neighbour=0;
+    int i=0,j=0;
+    int count=0;
+    int p0,p1,p2,p3,p4,p5,p6,p7,p8;
+    int real_pixel_head;
+
+    //------------------------
+    // p1 p2 p3
+    // p8 p0 p4
+    // p7 p6 p5
+    //------------------------
+
+
+    int mark_array[COLS_e*ROWS_e];
+
+    //1. pass through image.
+    while(mark > 0) {
+        mark=0;
+        //initialize the array,
+        for(i=0; i<ROWS_e*COLS_e; i++) {
+            mark_array[i] = -2;
+        }
+
+        //printf("ori:\n");
+    //    for(r=0;r<ROWS_e;r++){
+    //       for(c=0;c<COLS_e;c++){
+    //           printf("%4d",letter[r*COLS_e+c]);
+      //     }printf("\n");
+    //    }printf("\n\n");
+
+        for (r = 0; r < ROWS_e ; r++) {
+            for (c = 0 ; c < COLS_e ; c++) {
+
+
+              p0=0;p1=0;p2=0;p3=0;p4=0;p5=0;p6=0;p7=0;p8=0;
+
+              //e_to_ne = get_egde(letter,COLS_e,ROWS_e,
+              //               &p0,&p1,&p2,&p3,&p4,&p5,&p6,&p7,&p8,r,c);
+            e_to_ne= get_EdgeTrans(letter, COLS_e,ROWS_e,c,r);
+
+                //3.checking neighbour
+                //neighbour =  get_neighbour(p0,p1,p2,p3,p4,p5,p6,p7,p8);
+                neighbour=get_neighborNum(letter,COLS_e, ROWS_e,c,r);
+
+                if( neighbour >=2 && neighbour<=6 &&  e_to_ne==1)
+          			{
+
+          					// check N S W E pixels states
+          					if((letter[r*COLS_e+c-1]==0&& letter[(r+1)*COLS_e+c]==0) ||letter[(r-1)*COLS_e+c] ==0 || letter[r*COLS_e+c+1]==0 )
+          					{
+          					//if it is non-edge doesn't mark the point
+          						if( letter[r*COLS_e+c]!=0)
+          						{
+
+          							letter[r*COLS_e+c]= 127 ;
+          							mark++;
+          						}
+          					}
+          			}
+              // 4.check N, E, or(W and S) are nor edge pixels
+                // p1     p2(A)  p3
+                // p8(C)  p0     p4(B)
+                // p7     p6(D)  p5
+                int _4_pass = 0;
+              /*  if((p2==0) || (p4==0) || (p8==0&&p6==0)) {
+                    _4_pass = 1;
+                }
+                if  (( (neighbour>=2) && (neighbour<=6)) && (e_to_ne==1) ) {
+
+                    if( _4_pass ==1){
+                      //_4_pass = 0;
+                    _4_pass = 0;
+                     mark_array[mark] = r*(COLS_e) +  c ;
+                      mark++;
+
+                    }
+
+                }*/
+  //          }
+//        }  //end of row loop.
+
+        /*for(i=0; i<ROWS_e*COLS_e; i++) {
+            if(mark_array[i]==-2){
+                letter[ r*(COLS_e) +  c ]=0;
+            }
+            //if (mark_array[i]==-2) break;
+            //  letter[mark_array[i]] = 0;
+        }*//*
+        for (r = 1; r < ROWS_e-1; ++r)
+    			for (c = 1; c < COLS_e-1; ++c)
+    			{
+    				if(letter[r*COLS_e+c]==127)
+    				{
+    					// printf("c: %d  r: %d \n",c, r );
+    					letter[r*COLS_e+c]=0;
+    				}
+    			}
+        printf("mark:%d\n",mark);*/
+/*
+        for(i=0;i<ROWS_e*ROWS_e;i++) {
+            //if(mark_array[i]==-2) break;
+            printf("%d, \n",mark_array[i]);
+        }
+        printf("\n");
+
+*/
+
+  //  }//end of while
+/*
+     printf("result:\n");
+     for(r=0;r<ROWS_e;r++){
+        for(c=0;c<COLS_e;c++){
+            printf("%4d",letter[r*COLS_e+c]);
+        }printf("\n");
+     }printf("\n\n");
+*/
+
+
+//  return letter;
+  //  printf("count:%d\n",count);
+//}
+
+
+//void get_end_branch_point(unsigned char*, int*,int*,int,int,int,int);
+void get_end_branch_point(unsigned char* letter, int* end, int* branch,
+                           int COLS_e, int ROWS_e){
+//XXX: col_pos, row_pos may not usful.
+    int r=0, c=0;
+    int status=0;
+    int p1=1,p2=0,p3=0,p4=0,p5=0,p6=0,p7=0,p8=0,p0=0;
+    *end = 0;
+    *branch = 0;
+
+    for(r=0;r < ROWS_e; r++){
+        for(c=0; c < COLS_e; c++){
+            if(letter[r*COLS_e+c]==0){
+                //do nothing.
+            }else{
+
+                status = status+ get_EdgeTrans( letter, COLS_e, ROWS_e,r,c);
+                //status = status+ get_egde( letter, COLS_e, ROWS_e,&p0, &p1, &p2, &p3,&p4, &p5, &p6, &p7, &p8,r,c);
+                 }
+
+       }
+
+    }
+    if(status == 1) *end = 1;
+    if(status > 2)  *branch = 1;
+
+
+
+
+}

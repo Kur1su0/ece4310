@@ -1,0 +1,8 @@
+THRE	130	DISTANCE	4	ANGLE	25	isCLEAR	0
+Region:	1(230)	size:	  38	average: -10.365467	20.377570	-8.797753
+Region:	2(205)	size:	 366	average: 3.074876	-7.762893	-8.689626
+Region:	3(180)	size:	 564	average: -9.000660	5.137513	-3.862289
+Region:	4(155)	size:	5116	average: 11.599640	207.092688	1.691084
+Region:	5(130)	size:	 171	average: -1.080341	10.857151	-4.738684
+Region:	6(105)	size:	 426	average: 5.054863	-5.277918	-8.823211
+6 total regions were found

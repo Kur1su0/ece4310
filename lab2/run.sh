@@ -1,0 +1,7 @@
+thre=25
+for i in 1 2 3 4 5 6 7 8 9 10
+do  
+    ./lab2 ${thre} > mat/${thre}
+    thre=`expr $thre + 25`
+done
+
